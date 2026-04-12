@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrowdSense AI – Smart Stadium Management System</title>
+  <meta name="description" content="AI-Powered Smart Stadium Management System for real-time crowd monitoring, predictive routing, virtual queues, and intelligent assistance at large-scale sporting venues.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏟️</text></svg>">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════════════════ -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">🏟️</div>
+      <span data-i18n="app_title">CrowdSense AI</span>
+    </div>
+
+    <nav class="nav-tabs" id="navTabs">
+      <button class="nav-tab active" data-section="dashboard" id="tab-dashboard">
+        <span class="tab-icon">📊</span>
+        <span data-i18n="nav_dashboard">Dashboard</span>
+      </button>
+      <button class="nav-tab" data-section="routes" id="tab-routes">
+        <span class="tab-icon">🗺️</span>
+        <span data-i18n="nav_routes">Route Finder</span>
+      </button>
+      <button class="nav-tab" data-section="queue" id="tab-queue">
+        <span class="tab-icon">🎫</span>
+        <span data-i18n="nav_queue">Queue & Orders</span>
+      </button>
+      <button class="nav-tab" data-section="stalls" id="tab-stalls">
+        <span class="tab-icon">🏪</span>
+        <span data-i18n="nav_stalls">Stalls</span>
+      </button>
+      <button class="nav-tab" data-section="help" id="tab-help">
+        <span class="tab-icon">🆘</span>
+        <span data-i18n="nav_help">Help</span>
+      </button>
+      <button class="nav-tab" data-section="assistant" id="tab-assistant">
+        <span class="tab-icon">🤖</span>
+        <span data-i18n="nav_assistant">AI Assistant</span>
+      </button>
+    </nav>
+
+    <div class="header-controls">
+      <!-- Language Selector -->
+      <div class="lang-selector" id="langSelector">
+        <button class="btn-icon tooltip" data-tooltip="Language" id="langToggle" aria-label="Select language">🌐</button>
+        <div class="lang-dropdown" id="langDropdown">
+          <button class="lang-option active" data-lang="en">🇺🇸 English</button>
+          <button class="lang-option" data-lang="es">🇪🇸 Español</button>
+          <button class="lang-option" data-lang="hi">🇮🇳 हिन्दी</button>
+          <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
+          <button class="lang-option" data-lang="ta">🇮🇳 தமிழ்</button>
+          <button class="lang-option" data-lang="ml">🇮🇳 മലയാളം</button>
+        </div>
+      </div>
+      <!-- Theme Toggle -->
+      <button class="btn-icon tooltip" data-tooltip="Toggle theme" id="themeToggle" aria-label="Toggle dark/light theme">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main class="app-container">
+
+<!-- ═══════════════════════════════════════════════════════════════
+     DASHBOARD SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section active" id="section-dashboard">
+  <div class="section-header">
+    <h1 class="section-title" data-i18n="dashboard_title">Live Crowd Density</h1>
+    <p class="section-subtitle" data-i18n="dashboard_subtitle">Real-time crowd monitoring with AI-powered predictions</p>
+  </div>
+
+  <div class="grid-4" id="statsGrid" style="margin-bottom: 20px;">
+    <div class="stat-card">
+      <div class="stat-value" id="statAvgDensity">--</div>
+      <div class="stat-label" data-i18n="stats_avg_density">Avg Density</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statBusiest">--</div>
+      <div class="stat-label" data-i18n="stats_busiest">Busiest Zone</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statQuietest">--</div>
+      <div class="stat-label" data-i18n="stats_quietest">Quietest Zone</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statTrend">--</div>
+      <div class="stat-label" data-i18n="stats_prediction">Trend</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div class="heatmap-container">
+      <canvas class="heatmap-canvas" id="heatmapCanvas"></canvas>
+      <div class="heatmap-legend">
+        <span data-i18n="legend_low">Low</span>
+        <div class="legend-bar"></div>
+        <span data-i18n="legend_high">High</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     ROUTE FINDER SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="section-routes">
+  <div class="section-header">
+    <h1 class="section-title" data-i18n="route_title">Smart Route Finder</h1>
+    <p class="section-subtitle" data-i18n="route_subtitle">AI-optimized paths with real-time crowd avoidance</p>
+  </div>
+
+  <div class="card">
+    <div class="route-form">
+      <div class="form-group">
+        <label class="form-label" data-i18n="route_from">From Zone</label>
+        <select class="form-select" id="routeFrom"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="route_to">To Zone</label>
+        <select class="form-select" id="routeTo"></select>
+      </div>
+      <button class="btn btn-primary" id="findRouteBtn" data-i18n="route_find">Find Route</button>
+      <button class="btn btn-secondary" id="findExitBtn" data-i18n="route_exit">Find Best Exit</button>
+    </div>
+
+    <div class="route-result" id="routeResult" style="display:none;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+        <span style="font-weight:700;" data-i18n="route_cost">Congestion Cost</span>
+        <span class="badge badge-info" id="routeCost">--</span>
+      </div>
+      <div class="route-path" id="routePath"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     QUEUE & ORDERS SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="section-queue">
+  <div class="section-header">
+    <h1 class="section-title" data-i18n="queue_title">Queue & Orders</h1>
+    <p class="section-subtitle" data-i18n="queue_subtitle">Virtual queue system with AI wait-time prediction</p>
+  </div>
+
+  <div class="grid-4" id="queueGrid"></div>
+
+  <div style="margin-top:28px;">
+    <h2 class="card-title" style="margin-bottom:16px;">
+      <span class="icon">📦</span>
+      <span data-i18n="queue_your_orders">Your Orders</span>
+    </h2>
+    <div id="ordersContainer">
+      <div class="empty-state" id="noOrdersMsg">
+        <div class="empty-state-icon">🎫</div>
+        <p data-i18n="queue_no_orders">No orders yet. Place an order from any stall!</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     STALLS SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="section-stalls">
+  <div class="section-header">
+    <h1 class="section-title" data-i18n="stalls_title">Stalls & Offerings</h1>
+    <p class="section-subtitle" data-i18n="stalls_subtitle">Food, merchandise, and entertainment</p>
+  </div>
+
+  <div class="filter-tabs" id="stallFilters">
+    <button class="filter-tab active" data-filter="all" data-i18n="stalls_all">All</button>
+    <button class="filter-tab" data-filter="food" data-i18n="stalls_food">Food</button>
+    <button class="filter-tab" data-filter="merchandise" data-i18n="stalls_merchandise">Merchandise</button>
+    <button class="filter-tab" data-filter="entertainment" data-i18n="stalls_entertainment">Entertainment</button>
+  </div>
+
+  <div class="grid-4" id="stallsGrid"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HELP SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="section-help">
+  <div class="section-header">
+    <h1 class="section-title" data-i18n="help_title">Help & Emergency</h1>
+    <p class="section-subtitle" data-i18n="help_subtitle">Medical, first aid, and information services</p>
+  </div>
+
+  <div class="card" style="background: var(--gradient-danger); color:white; margin-bottom:20px; border:none;">
+    <p style="font-weight:700; font-size:1.05rem;" data-i18n="help_emergency">🚨 Emergency? Call stadium security: +1-555-0199</p>
+    <a href="tel:+15550199" class="btn" style="background:white; color:#ef4444; margin-top:10px; font-weight:700; border:none;">📞 +1-555-0199</a>
+  </div>
+
+  <div id="helpGrid" class="grid-4"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     AI ASSISTANT SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="section-assistant">
+  <div class="section-header">
+    <h1 class="section-title" data-i18n="assistant_title">AI Assistant</h1>
+    <p class="section-subtitle" data-i18n="assistant_subtitle">Your intelligent stadium companion</p>
+  </div>
+
+  <div class="grid-2" style="align-items:start;">
+    <div class="chat-container" id="chatContainer">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-bubble assistant" data-i18n="assistant_welcome">👋 Hi! I'm your CrowdSense AI assistant. Ask me about routes, food, queues, or anything else!</div>
+      </div>
+      <div class="chat-suggestions" id="chatSuggestions">
+        <button class="chat-suggestion" onclick="sendChat(this.textContent)" data-i18n="chat_where_should_i_go">Where should I go?</button>
+        <button class="chat-suggestion" onclick="sendChat(this.textContent)" data-i18n="chat_find_food">Find food near me</button>
+        <button class="chat-suggestion" onclick="sendChat(this.textContent)" data-i18n="chat_show_offers">Show offers</button>
+        <button class="chat-suggestion" onclick="sendChat(this.textContent)" data-i18n="chat_exit_stadium">Exit stadium</button>
+        <button class="chat-suggestion" onclick="sendChat(this.textContent)" data-i18n="chat_medical_help">Nearest medical help</button>
+      </div>
+      <div class="chat-input-bar">
+        <input type="text" class="chat-input" id="chatInput" placeholder="Ask me anything about the stadium..." data-i18n-placeholder="assistant_placeholder">
+        <button class="btn btn-primary" id="chatSendBtn" data-i18n="assistant_send">Send</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:12px;">📍 <span data-i18n="user_location">Your Location</span></div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="current_zone">Current Zone</label>
+          <select class="form-select" id="userZoneSelect"></select>
+        </div>
+        <p class="zone-hint" id="userZoneHint" style="margin-top:8px;"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">💡 <span data-i18n="quick_actions">Quick Actions</span></div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button class="btn btn-secondary" onclick="sendChat(this.querySelector('span').textContent)">📍 <span data-i18n="chat_where_am_i">Where am I?</span></button>
+          <button class="btn btn-secondary" onclick="sendChat(this.querySelector('span').textContent)">📊 <span data-i18n="chat_how_busy">Crowd status</span></button>
+          <button class="btn btn-secondary" onclick="sendChat(this.querySelector('span').textContent)">🍔 <span data-i18n="chat_order_food">Order food</span></button>
+          <button class="btn btn-secondary" onclick="sendChat(this.querySelector('span').textContent)">🚪 <span data-i18n="chat_navigate_exit">Navigate to exit</span></button>
+          <button class="btn btn-secondary" onclick="sendChat(this.querySelector('span').textContent)">🛍️ <span data-i18n="chat_show_merchandise">Merchandise</span></button>
+          <button class="btn btn-secondary" onclick="sendChat(this.querySelector('span').textContent)">🎮 <span data-i18n="chat_entertainment">Entertainment options</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Order Modal -->
+<div class="modal-overlay" id="orderModal" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">
+      <span>🛒</span>
+      <span data-i18n="order_modal_title">Place Order</span>
+      <span style="flex:1;"></span>
+      <button class="btn-icon" onclick="closeOrderModal()" aria-label="Close modal">✕</button>
+    </div>
+    <div id="orderModalBody"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid var(--border-subtle); padding-top:16px;">
+      <div>
+        <span data-i18n="order_modal_total">Total</span>: <strong id="orderModalTotal" style="font-family:var(--font-mono); font-size:1.2rem; color:var(--accent-4);">₹0.00</strong>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" onclick="closeOrderModal()" data-i18n="order_modal_cancel">Cancel</button>
+        <button class="btn btn-primary" id="placeOrderBtn" data-i18n="order_modal_place">Place Order</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal-overlay" id="paymentModal" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">
+      <span>💳</span>
+      <span data-i18n="payment_modal_title">Payment Checkout</span>
+      <span style="flex:1;"></span>
+      <button class="btn-icon" onclick="closePaymentModal()" aria-label="Close modal">✕</button>
+    </div>
+    <div id="paymentModalBody" style="margin:20px 0;">
+      <h3 style="margin-bottom:8px;" data-i18n="payment_order_summary">Order Summary</h3>
+      <div id="paymentSummaryItems" style="margin-bottom:16px; max-height:100px; overflow-y:auto; font-size:0.9rem; color:var(--text-dim);"></div>
+      <div style="margin-bottom:12px;">
+        <label class="form-label" data-i18n="payment_apply_discount">Apply Discount Offer</label>
+        <select class="form-select" id="paymentOfferSelect" onchange="updatePaymentTotal()">
+          <option value="0" data-i18n="payment_no_offer">No Offer Applied</option>
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label class="form-label" data-i18n="payment_mode">Payment Mode</label>
+        <div style="display:flex; gap:12px; font-size:0.9rem; margin-top:6px;">
+          <label><input type="radio" name="paymentMode" value="upi" checked> <span data-i18n="payment_upi">UPI</span></label>
+          <label><input type="radio" name="paymentMode" value="card"> <span data-i18n="payment_card">Credit/Debit Card</span></label>
+          <label><input type="radio" name="paymentMode" value="cash"> <span data-i18n="payment_cash">Cash</span></label>
+        </div>
+      </div>
+      <div id="paymentLoading" style="display:none; text-align:center; padding:16px; color:var(--accent-2); font-weight:bold;" data-i18n="payment_processing">
+        Processing Payment... ⌛
+      </div>
+      <div id="paymentSuccess" style="display:none; text-align:center; padding:16px; color:var(--success); font-weight:bold;" data-i18n="payment_success">
+        ✅ Payment Done Successfully!
+      </div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-subtle); padding-top:16px;">
+      <div>
+        <span data-i18n="payment_modal_total">Final Total</span>: <strong id="paymentModalTotal" style="font-family:var(--font-mono); font-size:1.2rem; color:var(--accent-4);">₹0.00</strong>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" onclick="closePaymentModal()" data-i18n="payment_modal_cancel">Cancel</button>
+        <button class="btn btn-primary" id="confirmPaymentBtn" data-i18n="payment_modal_pay">Pay & Place Order</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
