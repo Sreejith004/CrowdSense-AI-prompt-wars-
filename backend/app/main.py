@@ -65,7 +65,7 @@ app.include_router(assistant.router)
 app.include_router(stalls.router)
 
 # ── Static files (frontend) ──────────────────────────────────────────
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
+frontend_dir = os.path.join(os.getcwd(), "frontend")
 if os.path.isdir(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
