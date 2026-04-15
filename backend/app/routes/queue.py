@@ -19,9 +19,9 @@ router = APIRouter(prefix="/api/v1/queue", tags=["Queue & Orders"])
 
 
 @router.get("/all")
-async def all_queues():
-    """Get queue info for all stalls."""
-    return get_all_queues()
+async def all_queues(stadium: str | None = None):
+    """Get queue info for all stalls (filtered by stadium if provided)."""
+    return get_all_queues(stadium)
 
 
 @router.get("/stall/{stall_id}")
@@ -34,10 +34,25 @@ async def stall_queue(stall_id: str):
 async def place_order(req: CreateOrderRequest):
     """Place a new order (joins the virtual queue)."""
     items = [item.model_dump() for item in req.items]
-    result = create_order(sanitize_id(req.stall_id), items, req.user_name, req.discount_applied)
+    result = create_order(
+        sanitize_id(req.stall_id), 
+        items, 
+        req.user_name, 
+        req.user_id, 
+        req.discount_applied,
+        req.stadium_name,
+        req.match_name
+    )
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@router.get("/user-orders/{user_id}")
+async def user_orders(user_id: str):
+    """Get all orders for a specific user."""
+    from app.services.queue_service import get_user_orders
+    return get_user_orders(sanitize_id(user_id))
 
 
 @router.get("/order/{order_id}")

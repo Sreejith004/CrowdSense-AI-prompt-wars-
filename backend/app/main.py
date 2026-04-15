@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.data.seed import seed_database
-from app.routes import assistant, crowd, decision, queue, routing, stalls
+from app.routes import assistant, auth, crowd, decision, facilities, queue, routing, stalls
 from app.utils.logger import get_logger
 
 log = get_logger("main")
@@ -57,7 +57,9 @@ app.add_middleware(
 )
 
 # ── Routes ────────────────────────────────────────────────────────────
+app.include_router(auth.router)
 app.include_router(crowd.router)
+app.include_router(facilities.router)
 app.include_router(routing.router)
 app.include_router(queue.router)
 app.include_router(decision.router)
@@ -65,9 +67,17 @@ app.include_router(assistant.router)
 app.include_router(stalls.router)
 
 # ── Static files (frontend) ──────────────────────────────────────────
-frontend_dir = os.path.join(os.getcwd(), "frontend")
+# Calculate path relative to this file: backend/app/main.py -> ../../frontend
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+frontend_dir = os.path.join(base_dir, "frontend")
+
 if os.path.isdir(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+else:
+    # Fallback to CWD just in case
+    frontend_dir = os.path.join(os.getcwd(), "frontend")
+    if os.path.isdir(frontend_dir):
+        app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 
 @app.get("/api/health")

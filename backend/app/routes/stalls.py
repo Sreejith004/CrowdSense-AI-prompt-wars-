@@ -3,17 +3,26 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.data.seed import STALLS_DATA, HELP_LOCATIONS
+from app.data.seed import STALLS_DATA, HELP_LOCATIONS, STADIUMS
 
 router = APIRouter(prefix="/api/v1", tags=["Stalls & Help"])
 
 
+@router.get("/stadiums")
+async def list_stadiums():
+    """List all available stadiums."""
+    return STADIUMS
+
+
 @router.get("/stalls")
-async def list_stalls(category: str | None = None):
-    """List all stalls, optionally filtered by category."""
+async def list_stalls(category: str | None = None, stadium: str | None = None):
+    """List all stalls, optionally filtered by category and stadium."""
+    data = STALLS_DATA
+    if stadium:
+        data = [s for s in data if s.get("stadium_id") == stadium]
     if category:
-        return [s for s in STALLS_DATA if s["category"] == category]
-    return STALLS_DATA
+        data = [s for s in data if s["category"] == category]
+    return data
 
 
 @router.get("/stalls/{stall_id}")
@@ -26,15 +35,20 @@ async def get_stall(stall_id: str):
 
 
 @router.get("/help")
-async def list_help():
-    """List all help / emergency locations."""
+async def list_help(stadium: str | None = None):
+    """List all help / emergency locations, optionally filtered by stadium."""
+    if stadium:
+        return [h for h in HELP_LOCATIONS if h.get("stadium_id") == stadium]
     return HELP_LOCATIONS
 
 
 @router.get("/help/{location_type}")
-async def help_by_type(location_type: str):
-    """Filter help locations by type (medical, first_aid, info_desk)."""
-    return [h for h in HELP_LOCATIONS if h["type"] == location_type]
+async def help_by_type(location_type: str, stadium: str | None = None):
+    """Filter help locations by type and stadium."""
+    data = HELP_LOCATIONS
+    if stadium:
+        data = [h for h in data if h.get("stadium_id") == stadium]
+    return [h for h in data if h["type"] == location_type]
 
 
 @router.get("/zones")

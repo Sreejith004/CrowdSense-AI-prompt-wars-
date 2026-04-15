@@ -31,16 +31,17 @@ def recommend(user_zone: str, intent: str = "general") -> dict[str, Any]:
 
         if scored:
             best = scored[0][1]
-            offers_text = ""
-            if best.get("offers"):
-                offers_text = " | Offers: " + ", ".join(o["title"] for o in best["offers"] if o.get("active"))
             recommendations.append({
                 "type": "food",
-                "title": f"🍔 Best food stall: {best['name']}",
-                "description": (
-                    f"~{best['queue']['estimated_wait_minutes']} min wait, "
-                    f"Zone {best['zone_id']} ({best['location_hint']}){offers_text}"
-                ),
+                "title_key": "rec_food_title",
+                "title_data": {"name": best["name"]},
+                "desc_key": "rec_food_desc",
+                "desc_data": {
+                    "wait": best["queue"]["estimated_wait_minutes"],
+                    "zone": best["zone_id"],
+                    "hint": best["location_hint"],
+                    "offers": [o["title"] for o in best["offers"] if o.get("active")]
+                },
                 "route": best["route"].get("path", []),
                 "extra": {"stall_id": best["stall_id"], "queue": best["queue"]},
             })
@@ -49,11 +50,13 @@ def recommend(user_zone: str, intent: str = "general") -> dict[str, Any]:
         exit_route = find_best_exit(user_zone)
         recommendations.append({
             "type": "exit",
-            "title": "🚪 Best exit route",
-            "description": (
-                f"Quickest exit via {exit_route.get('path', ['N/A'])[-1] if exit_route.get('path') else 'N/A'} "
-                f"(cost: {exit_route.get('total_cost', 'N/A')})"
-            ),
+            "title_key": "rec_exit_title",
+            "title_data": {},
+            "desc_key": "rec_exit_desc",
+            "desc_data": {
+                "destination": exit_route.get("path", ["N/A"])[-1] if exit_route.get("path") else "N/A",
+                "cost": exit_route.get("total_cost", "N/A")
+            },
             "route": exit_route.get("path", []),
             "extra": {},
         })
@@ -71,8 +74,13 @@ def recommend(user_zone: str, intent: str = "general") -> dict[str, Any]:
         if best_med:
             recommendations.append({
                 "type": "medical",
-                "title": f"🏥 Nearest medical: {best_med['name']}",
-                "description": f"{best_med['description']} – Zone {best_med['zone_id']}",
+                "title_key": "rec_medical_title",
+                "title_data": {"name": best_med["name"]},
+                "desc_key": "rec_medical_desc",
+                "desc_data": {
+                    "desc": best_med["description"],
+                    "zone": best_med["zone_id"]
+                },
                 "route": best_med["route"].get("path", []),
                 "extra": {"phone": best_med.get("phone", "")},
             })

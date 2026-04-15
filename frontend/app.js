@@ -8,7 +8,7 @@ const API = '';  // Same-origin; proxied by FastAPI
 let currentLang = 'en';
 let translations = {};
 let crowdData = null;
-let userZone = 'A1';
+let userZone = '';
 let userOrders = [];
 let stallsData = [];
 let helpData = [];
@@ -16,6 +16,29 @@ let zonesData = [];
 let orderCart = {};
 let orderStallId = '';
 let heatmapInterval = null;
+let isLoggedIn = false;
+let currentUserId = null;
+let currentUserIdentifier = '';
+
+// ── Context State ──────────────────────────────────────────────
+let currentStadium = null;
+let currentMatch = null;
+let currentSeat = null;
+let currentZone = null;
+let targetZone = null;
+let isLoading = false;
+
+const STADIUM_LIST = [
+  { id: 'Chepauk', name: 'Chepauk Stadium', city: 'chennai' },
+  { id: 'Wankhede', name: 'Wankhede Stadium', city: 'mumbai' },
+  { id: 'NarendraModi', name: 'Narendra Modi Stadium', city: 'ahmedabad' }
+];
+
+const MOCK_SCHEDULE = {
+  'Chepauk': { match: 'CSK vs MI', live: true },
+  'Wankhede': { match: 'IND vs NZ', live: false },
+  'NarendraModi': { match: 'GT vs RR', live: true }
+};
 
 // ── Zone positions for heatmap ──────────────────────────────────
 const ZONE_POS = {
@@ -37,14 +60,123 @@ const ZONE_LIST = [
 document.addEventListener('DOMContentLoaded', async () => {
   await loadTranslations();
   initTheme();
-  initNavigation();
   initLanguage();
+  initAuth();
+  
+  // Handle context before data loading
+  await initContext();
+  
   populateZoneSelects();
-  await Promise.all([loadCrowdData(), loadStalls(), loadHelp()]);
+  
+  if (currentStadium) {
+    await refreshContextData();
+  } else {
+    // Show stadium selection
+    switchSection('stadium-selection');
+  }
+
   startHeatmapUpdates();
   initChat();
   initRouting();
+  initNavigation();
+  initStadiumSelection();
 });
+
+async function initContext() {
+  // 1. URL Params (Priority)
+  const params = parseUrlParams();
+  
+  if (params.stadium) {
+    currentStadium = params.stadium;
+    currentMatch = params.match || getCurrentMatch(params.stadium);
+    if (params.seat || params.zone) {
+      if (params.seat) currentSeat = params.seat;
+      targetZone = params.zone || getZoneFromSeat(params.seat);
+      currentZone = targetZone; // Show the ticket's zone in the context bar
+    }
+    localStorage.setItem('cs-selected-stadium', currentStadium);
+  } else {
+    // 2. Local Storage
+    const stored = localStorage.getItem('cs-selected-stadium');
+    if (stored && STADIUM_LIST.some(s => s.id === stored)) {
+      currentStadium = stored;
+      currentMatch = getCurrentMatch(stored);
+    }
+  }
+}
+
+function parseUrlParams() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return {
+    stadium: urlParams.get('stadium'),
+    match: urlParams.get('match'),
+    seat: urlParams.get('seat'),
+    zone: urlParams.get('zone')
+  };
+}
+
+function getZoneFromSeat(seat) {
+  if (!seat) return null;
+  const firstChar = seat.charAt(0).toUpperCase();
+  // Map A12 -> A1, B5 -> B1, etc. (Just using the prefix for current zone mapping logic)
+  if (ZONE_LIST.includes(firstChar + '1')) return firstChar + '1';
+  return 'A1'; // Fallback
+}
+
+function getCurrentMatch(stadiumId) {
+  const sched = MOCK_SCHEDULE[stadiumId];
+  return sched ? sched.match : 'No Match Today';
+}
+
+async function refreshContextData() {
+  if (!currentStadium) return;
+  isLoading = true;
+  updateLoadingUI();
+  
+  await Promise.all([loadCrowdData(), loadStalls(), loadHelp(), loadFacilities()]);
+  
+  isLoading = false;
+  updateLoadingUI();
+  updateContextBar();
+  renderStalls();
+  renderHelp();
+  renderQueues();
+  switchSection('dashboard');
+  applyTranslations();
+}
+
+function updateLoadingUI() {
+  // Simple loading indicator toggle
+  const loader = document.getElementById('globalLoader');
+  if (loader) loader.style.display = isLoading ? 'flex' : 'none';
+}
+
+function updateContextBar() {
+  const stadiumName = currentStadium ? t(currentStadium) : 'N/A';
+  const matchKey = currentMatch || 'match_none';
+  const matchDisplay = t(matchKey);
+  const matchInfo = MOCK_SCHEDULE[currentStadium];
+  
+  document.getElementById('ctxStadium').textContent = stadiumName;
+  document.getElementById('ctxMatch').textContent = matchDisplay;
+  document.getElementById('ctxSeat').textContent = currentSeat || t('not_available');
+  
+  // Translation for 'Not Selected'
+  const zoneDisplay = currentZone ? currentZone : (userZone || t('not_selected'));
+  document.getElementById('ctxZone').textContent = zoneDisplay;
+  
+  const liveBadge = document.getElementById('ctxLiveBadge');
+  if (liveBadge) liveBadge.style.display = (matchInfo && matchInfo.live) ? 'inline-block' : 'none';
+  
+  const bar = document.getElementById('contextBar');
+  if (bar) {
+    if (currentStadium) {
+      bar.style.display = 'flex';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════
 // TRANSLATIONS
@@ -66,12 +198,12 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     const val = t(key);
-    if (val !== key) el.textContent = val;
+    el.textContent = val;
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     const key = el.getAttribute('data-i18n-placeholder');
     const val = t(key);
-    if (val !== key) el.placeholder = val;
+    el.placeholder = val;
   });
 }
 
@@ -120,9 +252,12 @@ function initLanguage() {
       document.getElementById('langDropdown').classList.remove('show');
       // Re-render dynamic content
       if (crowdData) renderStats(crowdData);
+      initStadiumSelection(); // Re-render stadium cards (for Chennai, Mumbai, Ahmedabad)
       renderQueues();
       renderStalls();
       renderHelp();
+      updateContextBar();
+      renderOrders();
     });
   });
 
@@ -143,6 +278,10 @@ function highlightLang(lang) {
 function initNavigation() {
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
+      if (!currentStadium && tab.getAttribute('data-section') !== 'stadium-selection') {
+        alert('Please select a stadium first.');
+        return;
+      }
       const section = tab.getAttribute('data-section');
       switchSection(section);
     });
@@ -167,17 +306,17 @@ function populateZoneSelects() {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '';
-    if (id !== 'userZoneSelect') {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = t('route_select_zone');
-      sel.appendChild(opt);
-    }
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = t('route_select_zone');
+    sel.appendChild(opt);
     ZONE_LIST.forEach(z => {
       const opt = document.createElement('option');
       opt.value = z;
       opt.textContent = z;
       if (id === 'userZoneSelect' && z === userZone) opt.selected = true;
+      if (id === 'routeFrom' && z === userZone) opt.selected = true;
+      if (id === 'routeTo' && z === targetZone) opt.selected = true;
       sel.appendChild(opt);
     });
   });
@@ -187,15 +326,48 @@ function populateZoneSelects() {
     userZoneSel.addEventListener('change', () => {
       userZone = userZoneSel.value;
       updateZoneHint();
+      const rf = document.getElementById('routeFrom');
+      if (rf) { rf.value = userZone; syncRouteToState(); }
     });
     updateZoneHint();
   }
+
+  const rf = document.getElementById('routeFrom');
+  if (rf) {
+    rf.addEventListener('change', syncRouteToState);
+    syncRouteToState();
+  }
+}
+
+function syncRouteToState() {
+  const rf = document.getElementById('routeFrom');
+  const rt = document.getElementById('routeTo');
+  if (!rf || !rt) return;
+  const fromVal = rf.value;
+  Array.from(rt.options).forEach(opt => {
+    if (opt.value && opt.value === fromVal) {
+      opt.disabled = true;
+    } else {
+      opt.disabled = false;
+    }
+  });
+  if (rt.value === fromVal) rt.value = '';
 }
 
 function updateZoneHint() {
   const el = document.getElementById('userZoneHint');
+  if (!userZone) {
+    if (el) {
+      el.removeAttribute('data-i18n');
+      el.textContent = `📍 ${t('not_selected')}`;
+    }
+    return;
+  }
   const translationKey = 'hint_' + userZone.toLowerCase().replace('_', '');
-  if (el) el.textContent = `📍 ${t(translationKey) !== translationKey ? t(translationKey) : userZone}`;
+  if (el) {
+    el.setAttribute('data-i18n', translationKey);
+    el.textContent = `📍 ${t(translationKey) !== translationKey ? t(translationKey) : userZone}`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -424,7 +596,8 @@ function displayRoute(data) {
 // ══════════════════════════════════════════════════════════════════
 async function loadQueues() {
   try {
-    const res = await fetch(`${API}/api/v1/queue/all`);
+    const url = currentStadium ? `${API}/api/v1/queue/all?stadium=${currentStadium}` : `${API}/api/v1/queue/all`;
+    const res = await fetch(url);
     return await res.json();
   } catch { return []; }
 }
@@ -470,6 +643,7 @@ function renderOrders() {
     <div class="order-item">
       <div>
         <div class="order-token" style="font-size:1.1rem; color:var(--accent-1); margin-bottom:4px;">${t(o.stall_name)}</div>
+        ${o.stadium_name || o.match_name ? `<div style="font-size:0.72rem; color:var(--accent-2); margin-bottom:3px;">🏟️ ${o.stadium_name || ''} ${o.match_name ? '• ' + o.match_name : ''}</div>` : ''}
         <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${t('order_id')} ${o.order_id}</div>
         <div style="font-size:0.82rem; color:var(--text-secondary);">${o.items.map(i => `${t(i.name)} x${i.quantity}`).join(', ')}</div>
       </div>
@@ -477,6 +651,8 @@ function renderOrders() {
         <div class="badge ${o.status === 'ready' ? 'badge-success' : o.status === 'preparing' ? 'badge-warning' : o.status === 'cancelled' ? 'badge-danger' : 'badge-info'}">${t('status_' + o.status)}</div>
         <div style="font-family:var(--font-mono); font-weight:700; color:var(--accent-4); margin-top:4px;">${t('currency')}${o.total.toFixed(2)}</div>
         <div style="font-size:0.75rem; color:var(--success); margin-top:2px;">${t('payment_paid')}</div>
+        ${o.refund_status && o.refund_status !== 'none' ? `<div style="font-size:0.75rem; color:var(--accent-3); margin-top:2px;">💰 ${t('refund_status')}: ${t('refund_' + o.refund_status)}</div>` : ''}
+        ${o.status === 'cancelled' && (!o.refund_status || o.refund_status === 'none') ? `<div style="font-size:0.75rem; color:var(--warning); margin-top:2px;">💰 ${t('refund_status')}: ${t('refund_pending')}</div>` : ''}
         ${o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${t('queue_position')} ${o.queue_position + 1}</div>` : ''}
         ${o.status === 'pending' ? `<button class="btn btn-ghost" style="margin-top:6px; padding:4px 8px; font-size:0.75rem;" onclick="cancelOrder('${o.order_id}')">${t('order_cancel_btn')}</button>` : ''}
       </div>
@@ -500,14 +676,287 @@ function renderOrders() {
 
 window.cancelOrder = async function(orderId) {
   try {
-    await fetch(`${API}/api/v1/queue/order/${orderId}/status?status=cancelled`, { method: 'PATCH' });
-    const order = userOrders.find(o => o.order_id === orderId);
-    if (order) order.status = 'cancelled';
-    renderOrders();
+    const res = await fetch(`${API}/api/v1/queue/order/${orderId}/status?status=cancelled`, { method: 'PATCH' });
+    const data = await res.json();
+    
+    if (data.error) {
+       alert(data.error);
+       return;
+    }
+    
+    // Refresh history
+    loadUserOrders();
   } catch (err) {
     console.error('Cancel error:', err);
   }
 };
+
+// ══════════════════════════════════════════════════════════════════
+// AUTHENTICATION
+// ══════════════════════════════════════════════════════════════════
+function initAuth() {
+  const savedId = localStorage.getItem('cs_user_id');
+  const savedIdent = localStorage.getItem('cs_user_identifier');
+
+  if (savedId) {
+    isLoggedIn = true;
+    currentUserId = savedId;
+    currentUserIdentifier = savedIdent;
+    updateAuthUI();
+    loadUserOrders();
+  }
+
+  // Header login button
+  document.getElementById('headerLoginBtn').addEventListener('click', openLogin);
+  document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+  // Modal tab logic
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const mode = tab.getAttribute('data-mode');
+      document.getElementById('passwordGroup').style.display = mode === 'password' ? 'block' : 'none';
+      document.getElementById('otpGroup').style.display = mode === 'otp' ? 'block' : 'none';
+    });
+  });
+
+  // Form submits
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleLogin();
+  });
+  document.getElementById('signupForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleSignup();
+  });
+  document.getElementById('forgotForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleResetSubmit();
+  });
+}
+
+function updateAuthUI() {
+  const loginBtn = document.getElementById('headerLoginBtn');
+  const profile = document.getElementById('userProfile');
+  const displayId = document.getElementById('displayUserId');
+
+  if (isLoggedIn) {
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (profile) profile.style.display = 'flex';
+    if (displayId) displayId.textContent = currentUserIdentifier;
+  } else {
+    if (loginBtn) loginBtn.style.display = 'block';
+    if (profile) profile.style.display = 'none';
+  }
+}
+
+window.openLogin = function() {
+  closeAuthModals();
+  document.getElementById('loginModal').style.display = 'flex';
+};
+
+window.openSignup = function() {
+  closeAuthModals();
+  document.getElementById('signupModal').style.display = 'flex';
+};
+
+window.openForgotPassword = function() {
+  closeAuthModals();
+  document.getElementById('forgotModal').style.display = 'flex';
+};
+
+window.closeAuthModals = function() {
+  ['loginModal', 'signupModal', 'forgotModal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+};
+
+// ── Validation Helpers ──────────────────────────────────────────
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidMobile(mobile) {
+  return /^\d{10}$/.test(mobile);
+}
+
+function showInputError(inputId, messageKey) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  
+  el.classList.add('input-error');
+  
+  // Remove existing error text if any
+  const existing = el.parentNode.querySelector('.error-text');
+  if (existing) existing.remove();
+  
+  const errEl = document.createElement('span');
+  errEl.className = 'error-text';
+  errEl.textContent = t(messageKey);
+  el.parentNode.insertBefore(errEl, el.nextSibling);
+}
+
+function clearInputErrors() {
+  document.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+  document.querySelectorAll('.error-text').forEach(el => el.remove());
+}
+
+function validateIdentifier(id, identifierValue) {
+  clearInputErrors();
+  if (!identifierValue) return false;
+
+  // Smarter detection: if it has letters or an '@', treat as email. Otherwise mobile.
+  const isEmailAttempt = /[a-zA-Z]/.test(identifierValue) || identifierValue.includes('@');
+  
+  if (isEmailAttempt) {
+    if (!isValidEmail(identifierValue)) {
+      showInputError(id, 'invalid_email');
+      alert(t('invalid_email'));
+      return false;
+    }
+  } else {
+    if (!isValidMobile(identifierValue)) {
+      showInputError(id, 'invalid_mobile');
+      alert(t('invalid_mobile'));
+      return false;
+    }
+  }
+  return true;
+}
+
+async function handleLogin() {
+  const identifier = document.getElementById('loginIdentifier').value;
+  const password = document.getElementById('loginPassword').value;
+  const otp = document.getElementById('loginOtp').value;
+  const mode = document.querySelector('.auth-tab.active').getAttribute('data-mode');
+
+  if (!validateIdentifier('loginIdentifier', identifier)) return;
+
+  try {
+    const res = await fetch(`${API}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password, otp, mode })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || 'Login failed');
+      return;
+    }
+
+    const data = await res.json();
+    isLoggedIn = true;
+    currentUserId = data.user_id;
+    currentUserIdentifier = data.identifier;
+
+    localStorage.setItem('cs_user_id', currentUserId);
+    localStorage.setItem('cs_user_identifier', currentUserIdentifier);
+
+    updateAuthUI();
+    closeAuthModals();
+    loadUserOrders();
+  } catch (err) {
+    console.error('Login error:', err);
+    alert('An unexpected error occurred during login.');
+  }
+}
+
+async function handleSignup() {
+  const identifier = document.getElementById('signupIdentifier').value;
+  const password = document.getElementById('signupPassword').value;
+  const confirm = document.getElementById('signupConfirm').value;
+
+  if (!validateIdentifier('signupIdentifier', identifier)) return;
+
+  try {
+    const res = await fetch(`${API}/api/v1/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password, confirm_password: confirm })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || 'Signup failed');
+      return;
+    }
+
+    alert('Account created! Please login.');
+    openLogin();
+  } catch (err) {
+    console.error('Signup error:', err);
+  }
+}
+
+window.handleForgotStep1 = async function() {
+  const identifier = document.getElementById('forgotIdentifier').value;
+  if (!validateIdentifier('forgotIdentifier', identifier)) return;
+  try {
+    const res = await fetch(`${API}/api/v1/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier })
+    });
+
+    if (!res.ok) {
+      alert('User not found');
+      return;
+    }
+
+    document.getElementById('forgotStep1').style.display = 'none';
+    document.getElementById('forgotStep2').style.display = 'block';
+  } catch (err) {
+    console.error('Forgot error:', err);
+  }
+};
+
+async function handleResetSubmit() {
+  const identifier = document.getElementById('forgotIdentifier').value;
+  const reset_code = document.getElementById('forgotCode').value;
+  const new_password = document.getElementById('forgotNewPassword').value;
+
+  try {
+    const res = await fetch(`${API}/api/v1/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, reset_code, new_password })
+    });
+
+    if (!res.ok) {
+      alert('Invalid code or error');
+      return;
+    }
+
+    alert('Password reset successful! Please login.');
+    openLogin();
+  } catch (err) {
+    console.error('Reset error:', err);
+  }
+}
+
+function handleLogout() {
+  localStorage.removeItem('cs_user_id');
+  localStorage.removeItem('cs_user_identifier');
+  sessionStorage.removeItem('cs_user_id');
+  sessionStorage.removeItem('cs_user_identifier');
+  
+  // Refresh the page but KEEP seat/zone URL params for stadium navigation
+  window.location.reload();
+}
+
+async function loadUserOrders() {
+  if (!isLoggedIn || !currentUserId) return;
+  try {
+    const res = await fetch(`${API}/api/v1/queue/user-orders/${currentUserId}`);
+    userOrders = await res.json();
+    renderOrders();
+  } catch (err) {
+    console.error('Failed to load user orders:', err);
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════
 // ORDER MODAL
@@ -517,6 +966,13 @@ function openOrderModal(stallId) {
   orderCart = {};
   const stall = stallsData.find(s => s.stall_id === stallId);
   if (!stall) return;
+
+  // Guest Check
+  if (!isLoggedIn) {
+    alert(t('error_login_required') || 'Please login to place order');
+    openLogin();
+    return;
+  }
 
   const comboss = stall.offers.filter(o => o.combo_price);
 
@@ -548,7 +1004,7 @@ function openOrderModal(stallId) {
             <div style="font-size:0.75rem; color:var(--text-muted);">${offer.description ? t(offer.description) : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:12px;">
-            <span class="menu-item-price">$${offer.combo_price.toFixed(2)}</span>
+            <span class="menu-item-price">${t('currency')}${offer.combo_price.toFixed(2)}</span>
             <div class="qty-control">
               <button class="qty-btn" onclick="adjustQty('${offer.offer_id}', -1, ${offer.combo_price}, '${offer.title.replace(/'/g, "\\'")}')">−</button>
               <span class="qty-value" id="qty-${offer.offer_id}">0</span>
@@ -619,8 +1075,8 @@ function openPaymentModal(stallId) {
 
   const itemsHtml = items.map(i => `
     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-      <span>${i.name} x${i.quantity}</span>
-      <span>$${(i.price * i.quantity).toFixed(2)}</span>
+      <span>${t(i.name)} x${i.quantity}</span>
+      <span>${t('currency')}${(i.price * i.quantity).toFixed(2)}</span>
     </div>
   `).join('');
 
@@ -676,10 +1132,24 @@ async function confirmPaymentAndOrder(stallId) {
         const res = await fetch(`${API}/api/v1/queue/order`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stall_id: stallId, items, user_name: 'Guest', discount_applied: discountAmount }),
+          body: JSON.stringify({ 
+            stall_id: stallId, 
+            items, 
+            user_name: currentUserIdentifier || 'Guest', 
+            user_id: currentUserId,
+            discount_applied: discountAmount,
+            stadium_name: currentStadium ? STADIUM_LIST.find(s => s.id === currentStadium)?.name : null,
+            match_name: currentMatch || null
+          }),
         });
         const order = await res.json();
-        userOrders.push(order);
+        
+        if (order.error) {
+          alert(order.error);
+          return;
+        }
+
+        userOrders.unshift(order);
         closePaymentModal();
         renderOrders();
         renderQueues();
@@ -700,9 +1170,9 @@ async function confirmPaymentAndOrder(stallId) {
 // ══════════════════════════════════════════════════════════════════
 async function loadStalls() {
   try {
-    const res = await fetch(`${API}/api/v1/stalls`);
+    const url = currentStadium ? `${API}/api/v1/stalls?stadium=${currentStadium}` : `${API}/api/v1/stalls`;
+    const res = await fetch(url);
     stallsData = await res.json();
-    renderStalls();
   } catch { stallsData = []; }
 }
 
@@ -721,7 +1191,7 @@ function renderStalls(filter = 'all') {
       return `<div class="offer-badge">🏷️ ${t(o.title)}${info ? ` – ${info}` : ''}</div>`;
     }).join(' ');
 
-    const menuHtml = stall.menu.slice(0, 4).map(item =>
+    const menuHtml = stall.menu.map(item =>
       `<div class="menu-item">
         <span class="menu-item-name">${t(item.name)}</span>
         <span class="menu-item-price">${t('currency')}${item.price.toFixed(2)}</span>
@@ -767,11 +1237,55 @@ function navigateToStall(zoneId) {
 // ══════════════════════════════════════════════════════════════════
 async function loadHelp() {
   try {
-    const res = await fetch(`${API}/api/v1/help`);
+    const url = currentStadium ? `${API}/api/v1/help?stadium=${currentStadium}` : `${API}/api/v1/help`;
+    const res = await fetch(url);
     helpData = await res.json();
-    renderHelp();
   } catch { helpData = []; }
 }
+
+async function loadFacilities() {
+  try {
+    const url = currentStadium ? `${API}/api/v1/facilities/water?stadium=${currentStadium}` : `${API}/api/v1/facilities/water`;
+    const res = await fetch(url);
+    // Logic for facilities might be handled per-request in openWaterSection
+  } catch { }
+}
+
+function initStadiumSelection() {
+  const container = document.getElementById('stadiumList');
+  if (!container) return;
+  
+  container.innerHTML = STADIUM_LIST.map(stadium => `
+    <div class="card clickable-card stadium-card" onclick="selectStadium('${stadium.id}')">
+      <div class="card-title" data-i18n="${stadium.id}">${stadium.name}</div>
+      <div class="card-subtitle" data-i18n="${stadium.city}">${t(stadium.city)}</div>
+    </div>
+  `).join('');
+  
+  // IMMEDIATELY apply translations to the newly created card elements
+  applyTranslations();
+}
+
+window.selectStadium = async function(stadiumId) {
+  currentStadium = stadiumId;
+  currentMatch = getCurrentMatch(stadiumId);
+  currentSeat = null;
+  currentZone = null;
+  localStorage.setItem('cs-selected-stadium', stadiumId);
+  
+  await refreshContextData();
+};
+
+window.changeStadium = function() {
+  currentStadium = null;
+  currentMatch = null;
+  currentSeat = null;
+  currentZone = null;
+  localStorage.removeItem('cs-selected-stadium');
+  
+  document.getElementById('contextBar').style.display = 'none';
+  switchSection('stadium-selection');
+};
 
 function renderHelp() {
   const grid = document.getElementById('helpGrid');
@@ -780,7 +1294,7 @@ function renderHelp() {
   const typeIcons = { medical: '🏥', first_aid: '🩹', info_desk: 'ℹ️' };
   const typeLabels = { medical: t('help_medical'), first_aid: t('help_first_aid'), info_desk: t('help_info_desk') };
 
-  grid.innerHTML = helpData.map(loc => `
+  let html = helpData.map(loc => `
     <div class="card help-card">
       <div class="help-icon">${typeIcons[loc.type] || '📍'}</div>
       <div>
@@ -793,7 +1307,70 @@ function renderHelp() {
       </div>
     </div>
   `).join('');
+
+  // Add Water Card
+  html += `
+    <div class="card help-card" style="border: 2px solid var(--accent-4); background: var(--bg-card);">
+      <div class="help-icon">💧</div>
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">${t('help_water')}</div>
+        <span class="badge" style="background: var(--accent-4); color: white;">${t('help_facility') || 'Facility'}</span>
+        <div class="zone-hint" style="margin-top:6px;">📍 ${t('help_multiple_locations') || 'Multiple Locations'}</div>
+        <p style="font-size:0.82rem; color:var(--text-secondary); margin-top:6px;">${t('help_water_desc') || 'Stay hydrated! Find free purified drinking water points near you.'}</p>
+        <button class="btn btn-primary" style="margin-top:8px; width:100%; background: var(--accent-4); border:none;" onclick="openWaterSection()">${t('help_water')}</button>
+      </div>
+    </div>
+  `;
+
+  grid.innerHTML = html;
 }
+
+window.openWaterSection = async function() {
+  const section = document.getElementById('waterSection');
+  const grid = document.getElementById('waterGrid');
+  if (!section || !grid) return;
+
+  try {
+    // Load all water points
+    const res = await fetch(`${API}/api/v1/facilities/water`);
+    const waterPoints = await res.json();
+
+    // Load nearest
+    const nearestRes = await fetch(`${API}/api/v1/facilities/water/nearest/${userZone}`);
+    const nearest = await nearestRes.json();
+
+    grid.innerHTML = waterPoints.map(wp => {
+      const isNearest = nearest && wp.id === nearest.id;
+      return `
+        <div class="card" style="${isNearest ? 'border: 2px solid var(--accent-4); transform: scale(1.02); box-shadow: var(--shadow-lg);' : ''}">
+          ${isNearest ? `<div style="background: var(--accent-4); color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">${t('water_recommended')}</div>` : ''}
+          <div class="card-title" style="font-size:1rem;">🚰 ${t(wp.name) !== wp.name ? t(wp.name) : wp.name}</div>
+          <div class="zone-hint" style="margin:8px 0;">📍 ${t('stalls_zone') || 'Zone'} ${wp.zone}</div>
+          ${wp.nearby_landmark ? `<p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">📍 ${t(wp.nearby_landmark) !== wp.nearby_landmark ? t(wp.nearby_landmark) : wp.nearby_landmark}</p>` : ''}
+          <button class="btn btn-secondary btn-sm w-100" onclick="navigateToLocation('${wp.zone}')">${t('get_route')}</button>
+        </div>
+      `;
+    }).join('');
+
+    section.style.display = 'block';
+    section.scrollIntoView({ behavior: 'smooth' });
+    applyTranslations();
+  } catch (err) {
+    console.error('Failed to load water points:', err);
+  }
+};
+
+window.closeWaterSection = function() {
+  document.getElementById('waterSection').style.display = 'none';
+};
+
+window.navigateToLocation = function(zoneId) {
+  // Use existing routing UI
+  document.getElementById('routeFrom').value = userZone;
+  document.getElementById('routeTo').value = zoneId;
+  switchSection('routes');
+  findRoute();
+};
 
 // ══════════════════════════════════════════════════════════════════
 // AI ASSISTANT CHAT

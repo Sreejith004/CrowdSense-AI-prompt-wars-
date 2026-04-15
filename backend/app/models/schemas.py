@@ -7,6 +7,35 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
+# ── Auth ─────────────────────────────────────────────────────────────
+class AuthMode(str, Enum):
+    PASSWORD = "password"
+    OTP = "otp"
+
+
+class LoginRequest(BaseModel):
+    identifier: str  # mobile or email
+    password: Optional[str] = None
+    otp: Optional[str] = None
+    mode: AuthMode = AuthMode.PASSWORD
+
+
+class SignupRequest(BaseModel):
+    identifier: str
+    password: str
+    confirm_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str
+
+
+class ResetPasswordRequest(BaseModel):
+    identifier: str
+    reset_code: str
+    new_password: str
+
+
 # ── Crowd ────────────────────────────────────────────────────────────
 class ZoneDensity(BaseModel):
     zone_id: str
@@ -60,7 +89,10 @@ class CreateOrderRequest(BaseModel):
     stall_id: str
     items: list[OrderItem]
     user_name: str = "Guest"
+    user_id: Optional[str] = None
     discount_applied: float = 0
+    stadium_name: Optional[str] = None
+    match_name: Optional[str] = None
 
 
 class OrderResponse(BaseModel):
@@ -71,6 +103,8 @@ class OrderResponse(BaseModel):
     items: list[OrderItem]
     total: float
     status: OrderStatus
+    refund_status: str = "none"  # none, requested, refunded
+    user_id: Optional[str] = None
     estimated_wait_minutes: float
     queue_position: int
 

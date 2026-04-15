@@ -62,11 +62,58 @@
       </div>
       <!-- Theme Toggle -->
       <button class="btn-icon tooltip" data-tooltip="Toggle theme" id="themeToggle" aria-label="Toggle dark/light theme">🌙</button>
+      <!-- User / Auth Control -->
+      <div class="auth-control">
+        <button class="btn btn-secondary btn-sm" id="headerLoginBtn" data-i18n="nav_login">Login</button>
+        <div class="user-profile" id="userProfile" style="display:none;">
+          <span class="user-icon">👤</span>
+          <span class="user-id" id="displayUserId"></span>
+          <button class="btn btn-ghost btn-sm" id="logoutBtn" data-i18n="nav_logout">Logout</button>
+        </div>
+      </div>
     </div>
   </div>
 </header>
 
+<!-- Context Bar -->
+<div class="context-bar" id="contextBar" style="display:none;">
+  <div class="ctx-item">
+    <span class="ctx-label" data-i18n="label_stadium">Stadium</span>
+    <span class="ctx-value" id="ctxStadium">--</span>
+  </div>
+  <div class="ctx-item">
+    <span class="ctx-label" data-i18n="label_match">Match</span>
+    <span class="ctx-value">
+      <span id="ctxMatch">--</span>
+      <span class="badge badge-error" id="ctxLiveBadge" style="display:none; font-size:0.6rem; vertical-align:middle; margin-left:4px;" data-i18n="label_live">LIVE</span>
+    </span>
+  </div>
+  <div class="ctx-item" id="ctxSeatContainer">
+    <span class="ctx-label" data-i18n="label_seat">Seat</span>
+    <span class="ctx-value" id="ctxSeat">--</span>
+  </div>
+  <div class="ctx-item" id="ctxZoneContainer">
+    <span class="ctx-label" data-i18n="label_zone">Zone</span>
+    <span class="ctx-value" id="ctxZone">--</span>
+  </div>
+  <button class="btn-ghost btn-sm" onclick="changeStadium()" data-i18n="btn_change_stadium">Change Stadium</button>
+</div>
+
 <main class="app-container">
+
+<!-- ═══════════════════════════════════════════════════════════════
+     STADIUM SELECTION SECTION
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="section-stadium-selection">
+  <div class="section-header" style="text-align:center;">
+    <h1 class="section-title" data-i18n="stadium_select_title">Select Your Stadium</h1>
+    <p class="section-subtitle" data-i18n="stadium_select_subtitle">Choose a stadium to access real-time crowd data and services</p>
+  </div>
+  
+  <div class="stadium-grid" id="stadiumList">
+    <!-- Dynamically Populated -->
+  </div>
+</section>
 
 <!-- ═══════════════════════════════════════════════════════════════
      DASHBOARD SECTION
@@ -105,6 +152,14 @@
         <span data-i18n="legend_high">High</span>
       </div>
     </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <label class="form-label" style="margin-bottom: 0;" data-i18n="current_zone">Current Zone</label>
+      <select class="form-select" id="userZoneSelect" style="width: auto; min-width: 120px;"></select>
+    </div>
+    <div class="zone-hint" id="userZoneHint">📍 --</div>
   </div>
 </section>
 
@@ -200,6 +255,15 @@
   </div>
 
   <div id="helpGrid" class="grid-4"></div>
+
+  <!-- Water Locations Section (Dynamic) -->
+  <div id="waterSection" style="display:none; margin-top:32px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+       <h2 class="section-title" data-i18n="water_title" style="font-size:1.5rem;">Drinking Water Locations</h2>
+       <button class="btn btn-ghost" onclick="closeWaterSection()">✕</button>
+    </div>
+    <div id="waterGrid" class="grid-4"></div>
+  </div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════
@@ -230,15 +294,6 @@
     </div>
 
     <div>
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-title" style="margin-bottom:12px;">📍 <span data-i18n="user_location">Your Location</span></div>
-        <div class="form-group">
-          <label class="form-label" data-i18n="current_zone">Current Zone</label>
-          <select class="form-select" id="userZoneSelect"></select>
-        </div>
-        <p class="zone-hint" id="userZoneHint" style="margin-top:8px;"></p>
-      </div>
-
       <div class="card">
         <div class="card-title" style="margin-bottom:12px;">💡 <span data-i18n="quick_actions">Quick Actions</span></div>
         <div style="display:flex; flex-direction:column; gap:8px;">
@@ -320,6 +375,106 @@
         <button class="btn btn-primary" id="confirmPaymentBtn" data-i18n="payment_modal_pay">Pay & Place Order</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div class="modal-overlay" id="loginModal" style="display:none;">
+  <div class="modal auth-modal">
+    <div class="modal-title">
+      <span data-i18n="login_title">Login to CrowdSense</span>
+      <span style="flex:1;"></span>
+      <button class="btn-icon" onclick="closeAuthModals()">✕</button>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-mode="password" data-i18n="login_tab_password">Password</button>
+      <button class="auth-tab" data-mode="otp" data-i18n="login_tab_otp">OTP</button>
+    </div>
+    <form id="loginForm" class="auth-form">
+      <div class="form-group">
+        <label class="form-label" data-i18n="auth_identifier">Mobile or Email</label>
+        <input type="text" class="form-input" id="loginIdentifier" required>
+      </div>
+      <div class="form-group" id="passwordGroup">
+        <label class="form-label" data-i18n="auth_password">Password</label>
+        <input type="password" class="form-input" id="loginPassword">
+      </div>
+      <div class="form-group" id="otpGroup" style="display:none;">
+        <label class="form-label" data-i18n="auth_otp">Enter OTP (Use 1234)</label>
+        <input type="text" class="form-input" id="loginOtp" placeholder="1234">
+      </div>
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-primary w-100" data-i18n="login_btn">Login</button>
+        <button type="button" class="btn btn-link" onclick="openForgotPassword()" data-i18n="forgot_password_link">Forgot Password?</button>
+      </div>
+      <div class="auth-footer">
+        <span data-i18n="no_account">Don't have an account?</span>
+        <button type="button" class="btn btn-link" onclick="openSignup()" data-i18n="signup_link">Sign Up</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Signup Modal -->
+<div class="modal-overlay" id="signupModal" style="display:none;">
+  <div class="modal auth-modal">
+    <div class="modal-title">
+      <span data-i18n="signup_title">Create Account</span>
+      <span style="flex:1;"></span>
+      <button class="btn-icon" onclick="closeAuthModals()">✕</button>
+    </div>
+    <form id="signupForm" class="auth-form">
+      <div class="form-group">
+        <label class="form-label" data-i18n="auth_identifier">Mobile or Email</label>
+        <input type="text" class="form-input" id="signupIdentifier" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="auth_password">Password</label>
+        <input type="password" class="form-input" id="signupPassword" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="auth_confirm_password">Confirm Password</label>
+        <input type="password" class="form-input" id="signupConfirm" required>
+      </div>
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-primary w-100" data-i18n="signup_btn">Create Account</button>
+      </div>
+      <div class="auth-footer">
+        <span data-i18n="has_account">Already have an account?</span>
+        <button type="button" class="btn btn-link" onclick="openLogin()" data-i18n="login_link">Login</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div class="modal-overlay" id="forgotModal" style="display:none;">
+  <div class="modal auth-modal">
+    <div class="modal-title">
+      <span data-i18n="forgot_title">Reset Password</span>
+      <span style="flex:1;"></span>
+      <button class="btn-icon" onclick="closeAuthModals()">✕</button>
+    </div>
+    <form id="forgotForm" class="auth-form">
+      <div id="forgotStep1">
+        <div class="form-group">
+          <label class="form-label" data-i18n="auth_identifier">Mobile or Email</label>
+          <input type="text" class="form-input" id="forgotIdentifier" required>
+        </div>
+        <button type="button" class="btn btn-primary w-100" onclick="handleForgotStep1()" data-i18n="send_code_btn">Send Reset Code</button>
+      </div>
+      <div id="forgotStep2" style="display:none;">
+        <div class="form-group">
+          <label class="form-label" data-i18n="auth_reset_code">Reset Code (Use 0000)</label>
+          <input type="text" class="form-input" id="forgotCode" placeholder="0000" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="auth_new_password">New Password</label>
+          <input type="password" class="form-input" id="forgotNewPassword" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100" data-i18n="reset_password_btn">Reset Password</button>
+      </div>
+    </form>
   </div>
 </div>
 

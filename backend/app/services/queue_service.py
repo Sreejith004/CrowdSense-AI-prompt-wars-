@@ -51,7 +51,7 @@ def estimate_wait_minutes(stall_id: str) -> float:
     return round(queue_len * base_per_order * multiplier, 1)
 
 
-def create_order(stall_id: str, items: list[dict], user_name: str = "Guest", discount_applied: float = 0) -> dict[str, Any]:
+def create_order(stall_id: str, items: list[dict], user_name: str = "Guest", user_id: str | None = None, discount_applied: float = 0, stadium_name: str | None = None, match_name: str | None = None) -> dict[str, Any]:
     """Place an order and join the virtual queue."""
     _init_stall(stall_id)
 
@@ -77,7 +77,11 @@ def create_order(stall_id: str, items: list[dict], user_name: str = "Guest", dis
         "items": items,
         "total": round(total, 2),
         "status": "pending",
+        "refund_status": "none",
         "user_name": user_name,
+        "user_id": user_id,
+        "stadium_name": stadium_name,
+        "match_name": match_name,
         "created_at": time.time(),
     }
     _queues[stall_id].append(order)
@@ -88,7 +92,7 @@ def create_order(stall_id: str, items: list[dict], user_name: str = "Guest", dis
 
     # Persist to mock Firestore
     db.collection("orders").add(order_id, order)
-    log.info("Order %s created for stall %s (token #%d)", order_id, stall_id, order["token_number"])
+    log.info("Order %s created for stall %s (token #%d) by user %s", order_id, stall_id, order["token_number"], user_id)
     return order
 
 
@@ -98,11 +102,33 @@ def update_order_status(order_id: str, new_status: str) -> dict[str, Any] | None
         _advance_order_status(stall_id)
         for order in stall_orders:
             if order["order_id"] == order_id:
+                # Cancellation rule: Allow ONLY when status is "pending"
+                if new_status == "cancelled" and order["status"] != "pending":
+                    return {"error": "Only pending orders can be cancelled."}
+                
                 order["status"] = new_status
                 db.collection("orders").document(order_id).update({"status": new_status})
                 log.info("Order %s → %s", order_id, new_status)
                 return order
     return None
+
+
+def get_user_orders(user_id: str) -> list[dict[str, Any]]:
+    """Retrieve all orders for a specific user across all stalls."""
+    all_orders = []
+    # Force status advance for all stalls first
+    for stall_id in _queues:
+        _advance_order_status(stall_id)
+    
+    # Collect from in-memory queues (or mock DB)
+    for stall_orders in _queues.values():
+        for order in stall_orders:
+            if order.get("user_id") == user_id:
+                all_orders.append(order)
+    
+    # Sort by created_at descending
+    all_orders.sort(key=lambda x: x["created_at"], reverse=True)
+    return all_orders
 
 
 def get_order(order_id: str) -> dict[str, Any] | None:
@@ -138,10 +164,12 @@ def get_queue_info(stall_id: str) -> dict[str, Any]:
     }
 
 
-def get_all_queues() -> list[dict[str, Any]]:
-    """Queue info for all stalls."""
+def get_all_queues(stadium_id: str | None = None) -> list[dict[str, Any]]:
+    """Queue info for all stalls, optionally filtered by stadium."""
     results = []
     for s in STALLS_DATA:
+        if stadium_id and s.get("stadium_id") != stadium_id:
+            continue
         results.append(get_queue_info(s["stall_id"]))
     return results
 

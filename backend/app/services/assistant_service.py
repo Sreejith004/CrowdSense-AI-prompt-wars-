@@ -55,11 +55,20 @@ def _load_translations():
     global _TRANSLATIONS
     try:
         # Resolve path to frontend/translations.json
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        path = os.path.join(base_dir, "..", "frontend", "translations.json")
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                _TRANSLATIONS = json.load(f)
+        # Check current directory first, then sibling directory
+        possible_paths = [
+            os.path.join(os.getcwd(), "frontend", "translations.json"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "frontend", "translations.json"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "translations.json"),
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                log.info(f"Loading translations from: {path}")
+                with open(path, "r", encoding="utf-8") as f:
+                    _TRANSLATIONS = json.load(f)
+                return
+        log.warning("Could not find translations.json in any expected path.")
     except Exception as e:
         log.error(f"Failed to load translations: {e}")
 
@@ -73,6 +82,32 @@ def _tr(key: str, lang: str = "en") -> str:
     """Helper to get assistant-specific templates."""
     replies = _TRANSLATIONS.get(lang, {}).get("assistant_replies", {})
     return replies.get(key, _TRANSLATIONS.get("en", {}).get("assistant_replies", {}).get(key, key))
+
+def _format_rec(r: dict[str, Any], lang: str, prefix: str = "• ") -> str:
+    """Format a recommendation object into a localized string."""
+    title_template = _t(r.get("title_key", ""), lang)
+    title_data = {k: (_t(v, lang) if isinstance(v, str) else v) for k, v in r.get("title_data", {}).items()}
+    
+    desc_template = _t(r.get("desc_key", ""), lang)
+    desc_data = r.get("desc_data", {})
+    
+    # Process description data
+    processed_desc = {}
+    for k, v in desc_data.items():
+        if k == "offers":
+            if v:
+                label = _t("rec_offers_label", lang)
+                processed_desc[k] = label + ", ".join(_t(o, lang) for o in v)
+            else:
+                processed_desc[k] = ""
+        elif isinstance(v, str):
+            processed_desc[k] = _t(v, lang)
+        else:
+            processed_desc[k] = v
+            
+    title = title_template.format(**title_data)
+    desc = desc_template.format(**processed_desc)
+    return f"{prefix}{title}\n{desc}"
 
 def handle_message(message: str, user_zone: str = "A1", lang: str = "en") -> dict[str, Any]:
     """Process a user chat message and return a context-aware reply in the chosen language."""
@@ -100,9 +135,12 @@ def handle_message(message: str, user_zone: str = "A1", lang: str = "en") -> dic
     elif intent == "navigate":
         target = _extract_zone(message)
         if target:
+            # Refresh translations if empty (in case it failed at startup)
+            if not _TRANSLATIONS: _load_translations()
+            
             route = dijkstra(user_zone, target)
             reply = _tr("nav_path", lang).format(origin=user_zone, target=target) + "\n"
-            reply += f"Path: {' → '.join(route['path'])}\n"
+            reply += f"{_t('assistant_path', lang)}: {' → '.join(route['path'])}\n"
             reply += _tr("cost", lang).format(cost=route['total_cost'])
             data = {"route": route}
         else:
@@ -110,12 +148,13 @@ def handle_message(message: str, user_zone: str = "A1", lang: str = "en") -> dic
             suggestions = ["Navigate to GATE_N", "Navigate to B2", "Exit stadium"]
 
     elif intent == "exit":
-        route = find_best_exit(user_zone)
-        if route.get("path"):
-            reply = _tr("exit_best", lang).format(zone=user_zone) + "\n"
-            reply += _tr("exit_path", lang).format(path=' → '.join(route['path'])) + "\n"
-            reply += f"Exit: **{route['path'][-1]}** (" + _tr("cost", lang).format(cost=route['total_cost']) + ")"
-            data = {"route": route}
+        rec = recommend(user_zone, "exit")
+        exit_recs = [r for r in rec["recommendations"] if r["type"] == "exit"]
+        if exit_recs:
+            r = exit_recs[0]
+            reply = _format_rec(r, lang, prefix="**") + "**"
+            reply += f"\n\n{_t('assistant_route', lang)}: {' → '.join(r.get('route', []))}"
+            data = {"route": {"path": r.get("route", [])}} # Keep legacy data structure if needed
         else:
             reply = _tr("no_exit", lang)
 
@@ -124,11 +163,12 @@ def handle_message(message: str, user_zone: str = "A1", lang: str = "en") -> dic
         food_recs = [r for r in rec["recommendations"] if r["type"] == "food"]
         if food_recs:
             r = food_recs[0]
-            reply = f"**{_t(r['title'], lang)}**\n{_t(r['description'], lang)}\n\nRoute: {' → '.join(r.get('route', []))}"
+            reply = _format_rec(r, lang, prefix="**") + "**"
+            reply += f"\n\n{_t('assistant_route', lang)}: {' → '.join(r.get('route', []))}"
             data = {"recommendation": r}
             suggestions = ["Order food", "Show more food stalls", "Show offers"]
         else:
-            reply = "No food stalls are currently open." # Should be localized but food intent is usually triggered by specific stall names
+            reply = _t("assistant_no_food", lang)
             # For simplicity using a default from EN if not in templates
 
     elif intent == "medical":
@@ -137,13 +177,13 @@ def handle_message(message: str, user_zone: str = "A1", lang: str = "en") -> dic
         if med_recs:
             r = med_recs[0]
             phone = r.get("extra", {}).get("phone", "")
-            reply = f"**{_t(r['title'], lang)}**\n{_t(r['description'], lang)}"
+            reply = _format_rec(r, lang, prefix="**") + "**"
             if phone:
-                reply += f"\n📞 Call: {phone}"
-            reply += f"\n\nRoute: {' → '.join(r.get('route', []))}"
+                reply += f"\n📞 {_t('assistant_call', lang)}: {phone}"
+            reply += f"\n\n{_t('assistant_route', lang)}: {' → '.join(r.get('route', []))}"
             data = {"recommendation": r}
         else:
-            reply = "Emergency? Head to the nearest gate."
+            reply = _t("assistant_emergency", lang)
         suggestions = ["Navigate to first aid", "Call emergency"]
 
     elif intent == "queue":
@@ -227,7 +267,7 @@ def handle_message(message: str, user_zone: str = "A1", lang: str = "en") -> dic
         rec = recommend(user_zone, "general")
         lines = [_tr("suggestions_intro", lang) + "\n"]
         for r in rec["recommendations"]:
-            lines.append(f"• {_t(r['title'], lang)}: {_t(r['description'], lang)}")
+            lines.append(_format_rec(r, lang))
         reply = "\n".join(lines)
 
     # Localize suggestions if they match common keys
