@@ -19,6 +19,8 @@ let heatmapInterval = null;
 let isLoggedIn = false;
 let currentUserId = null;
 let currentUserIdentifier = '';
+let waterPointsData = [];
+let nearestWaterData = null;
 
 // ── Context State ──────────────────────────────────────────────
 let currentStadium = null;
@@ -42,11 +44,11 @@ const MOCK_SCHEDULE = {
 
 // ── Zone positions for heatmap ──────────────────────────────────
 const ZONE_POS = {
-  GATE_N: [50,8], GATE_S: [50,92], GATE_E: [92,50], GATE_W: [8,50],
-  A1: [25,22], A2: [42,22], A3: [58,22], A4: [75,22],
-  B1: [25,47], B2: [42,47], B3: [58,47], B4: [75,47],
-  C1: [25,72], C2: [42,72], C3: [58,72], C4: [75,72],
-  EXIT_MAIN: [50,3], EXIT_EAST: [95,32], EXIT_WEST: [5,72],
+  GATE_N: [50,17], GATE_S: [50,94], GATE_E: [85,55], GATE_W: [15,55],
+  A1: [30,33], A2: [43,33], A3: [57,33], A4: [70,33],
+  B1: [30,55], B2: [43,55], B3: [57,55], B4: [70,55],
+  C1: [30,78], C2: [43,78], C3: [57,78], C4: [70,78],
+  EXIT_MAIN: [50,4], EXIT_EAST: [95,33], EXIT_WEST: [5,78],
 };
 
 const ZONE_LIST = [
@@ -220,6 +222,14 @@ function initTheme() {
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('cs-theme', next);
     updateThemeIcon(next);
+    
+    // Instantly redraw heatmap for theme change
+    if (crowdData) {
+      drawHeatmap(crowdData);
+      if (document.getElementById('fullMapOverlay') && document.getElementById('fullMapOverlay').style.display === 'flex') {
+        drawHeatmap(crowdData, 'fullMapCanvas');
+      }
+    }
   });
 }
 
@@ -258,6 +268,9 @@ function initLanguage() {
       renderHelp();
       updateContextBar();
       renderOrders();
+      if (document.getElementById('waterSection').style.display === 'block') {
+        renderWaterGrid();
+      }
     });
   });
 
@@ -399,8 +412,8 @@ function renderStats(data) {
   document.getElementById('statTrend').textContent = trend;
 }
 
-function drawHeatmap(data) {
-  const canvas = document.getElementById('heatmapCanvas');
+function drawHeatmap(data, canvasId = 'heatmapCanvas') {
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const rect = canvas.parentElement.getBoundingClientRect();
@@ -409,6 +422,8 @@ function drawHeatmap(data) {
   ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
   const W = rect.width;
   const H = rect.height;
+  const isMobile = W < 450;
+  const scale = isMobile ? 0.8 : 1;
 
   // Background
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -438,9 +453,9 @@ function drawHeatmap(data) {
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.fillStyle = isDark ? 'rgba(16,185,129,0.25)' : 'rgba(16,185,129,0.35)';
-  ctx.font = '600 11px Inter, sans-serif';
+  ctx.font = `600 ${isMobile ? 10 : 11}px Inter, sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(t('field'), cx, cy + 4);
+  ctx.fillText(t('field'), cx, cy + (isMobile ? 3 : 4));
 
   if (!data || !data.zones) return;
 
@@ -475,8 +490,11 @@ function drawHeatmap(data) {
     const zone = densityMap[zoneId];
     const density = zone ? zone.current_density : 0.3;
 
-    // Glow
-    const radius = zoneId.startsWith('EXIT') || zoneId.startsWith('GATE') ? 16 : 22;
+    // Node scaling
+    let radius = (zoneId.startsWith('EXIT') || zoneId.startsWith('GATE') ? 16 : 22) * scale;
+    if (isMobile) {
+      radius = zoneId.startsWith('EXIT') || zoneId.startsWith('GATE') ? 12 : 15;
+    }
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * 2.5);
     const color = densityColor(density);
     gradient.addColorStop(0, color.replace(')', ', 0.3)').replace('rgb', 'rgba'));
@@ -497,19 +515,26 @@ function drawHeatmap(data) {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Label
-    ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
-    ctx.font = `600 ${radius > 18 ? 10 : 8}px Inter, sans-serif`;
+    // Label (Inside Circle)
+    ctx.fillStyle = '#ffffff'; // White text contrasts nicely with node colors
+    ctx.font = `700 ${isMobile ? 8 : 10}px Inter, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const label = zoneId.replace('GATE_', 'G-').replace('EXIT_', 'E-');
-    ctx.fillText(label, x, y - 1);
+    
+    // Shorten long labels to ensure they perfectly fit inside the radius
+    let label = zoneId.replace('GATE_', 'G-');
+    if (label === 'EXIT_MAIN') label = 'E-M';
+    if (label === 'EXIT_EAST') label = 'E-E';
+    if (label === 'EXIT_WEST') label = 'E-W';
+    
+    ctx.fillText(label, x, y);
 
-    // Density percentage
-    ctx.fillStyle = isDark ? 'rgba(241,245,249,0.6)' : 'rgba(15,23,42,0.5)';
-    ctx.font = '500 8px JetBrains Mono, monospace';
+    // Density percentage (Below Circle)
+    ctx.fillStyle = isDark ? 'rgba(241,245,249,0.8)' : 'rgba(15,23,42,0.8)';
+    ctx.font = `${isMobile ? 8 : 9}px JetBrains Mono, monospace`;
     const count = zone ? zone.headcount : Math.floor(density * 200);
-    ctx.fillText(`${(density * 100).toFixed(0)}% | ${count} ppl`, x, y + radius + 10);
+    const densityLabelY = y + radius + (isMobile ? 12 : 14);
+    ctx.fillText(`${(density * 100).toFixed(0)}% | ${count} ppl`, x, densityLabelY);
   });
 }
 
@@ -525,8 +550,33 @@ function startHeatmapUpdates() {
   }, 8000);
 
   window.addEventListener('resize', () => {
-    if (crowdData) drawHeatmap(crowdData);
+    if (crowdData) {
+      drawHeatmap(crowdData);
+      if (document.getElementById('fullMapOverlay').style.display === 'flex') {
+        drawHeatmap(crowdData, 'fullMapCanvas');
+      }
+    }
   });
+
+  // Expand button logic
+  const expandBtn = document.getElementById('btnExpandMap');
+  const closeFullMapBtn = document.getElementById('btnCloseFullMap');
+  const fullMapOverlay = document.getElementById('fullMapOverlay');
+
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      fullMapOverlay.style.display = 'flex';
+      document.body.classList.add('map-expanded');
+      drawHeatmap(crowdData, 'fullMapCanvas');
+    });
+  }
+
+  if (closeFullMapBtn) {
+    closeFullMapBtn.addEventListener('click', () => {
+      fullMapOverlay.style.display = 'none';
+      document.body.classList.remove('map-expanded');
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1204,7 +1254,7 @@ function renderStalls(filter = 'all') {
           <div class="card-title">${catIcons[stall.category] || ''} ${t(stall.name)}</div>
           <span class="stall-category-badge ${stall.category}">${t('stalls_' + stall.category)}</span>
         </div>
-        <div class="zone-hint" style="margin-bottom:10px;">📍 ${stall.zone_id} – ${stall.location_hint}</div>
+        <div class="zone-hint" style="margin-bottom:10px;">📍 ${stall.zone_id} – ${t(stall.location_hint)}</div>
         ${offersHtml ? `<div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">${offersHtml}</div>` : ''}
         <div style="margin-bottom:12px;">${menuHtml}</div>
         <div style="display:flex; gap:8px;">
@@ -1300,7 +1350,7 @@ function renderHelp() {
       <div>
         <div class="card-title" style="margin-bottom:4px;">${t(loc.name)}</div>
         <span class="badge badge-info">${typeLabels[loc.type] || loc.type}</span>
-        <div class="zone-hint" style="margin-top:6px;">📍 Zone ${loc.zone_id}</div>
+        <div class="zone-hint" style="margin-top:6px;">📍 ${t('label_zone')} ${loc.zone_id}</div>
         <p style="font-size:0.82rem; color:var(--text-secondary); margin-top:6px;">${t(loc.description)}</p>
         ${loc.phone ? `<a href="tel:${loc.phone}" class="help-phone">📞 ${t('help_call')} ${loc.phone}</a>` : ''}
         <button class="btn btn-secondary" style="margin-top:8px; width:100%;" onclick="navigateToStall('${loc.zone_id}')">${t('help_navigate')}</button>
@@ -1327,38 +1377,43 @@ function renderHelp() {
 
 window.openWaterSection = async function() {
   const section = document.getElementById('waterSection');
-  const grid = document.getElementById('waterGrid');
-  if (!section || !grid) return;
+  if (!section) return;
 
   try {
     // Load all water points
     const res = await fetch(`${API}/api/v1/facilities/water`);
-    const waterPoints = await res.json();
+    waterPointsData = await res.json();
 
     // Load nearest
     const nearestRes = await fetch(`${API}/api/v1/facilities/water/nearest/${userZone}`);
-    const nearest = await nearestRes.json();
+    nearestWaterData = await nearestRes.json();
 
-    grid.innerHTML = waterPoints.map(wp => {
-      const isNearest = nearest && wp.id === nearest.id;
-      return `
-        <div class="card" style="${isNearest ? 'border: 2px solid var(--accent-4); transform: scale(1.02); box-shadow: var(--shadow-lg);' : ''}">
-          ${isNearest ? `<div style="background: var(--accent-4); color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">${t('water_recommended')}</div>` : ''}
-          <div class="card-title" style="font-size:1rem;">🚰 ${t(wp.name) !== wp.name ? t(wp.name) : wp.name}</div>
-          <div class="zone-hint" style="margin:8px 0;">📍 ${t('stalls_zone') || 'Zone'} ${wp.zone}</div>
-          ${wp.nearby_landmark ? `<p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">📍 ${t(wp.nearby_landmark) !== wp.nearby_landmark ? t(wp.nearby_landmark) : wp.nearby_landmark}</p>` : ''}
-          <button class="btn btn-secondary btn-sm w-100" onclick="navigateToLocation('${wp.zone}')">${t('get_route')}</button>
-        </div>
-      `;
-    }).join('');
+    renderWaterGrid();
 
     section.style.display = 'block';
     section.scrollIntoView({ behavior: 'smooth' });
-    applyTranslations();
   } catch (err) {
     console.error('Failed to load water points:', err);
   }
 };
+
+function renderWaterGrid() {
+  const grid = document.getElementById('waterGrid');
+  if (!grid) return;
+
+  grid.innerHTML = waterPointsData.map(wp => {
+    const isNearest = nearestWaterData && wp.id === nearestWaterData.id;
+    return `
+      <div class="card" style="${isNearest ? 'border: 2px solid var(--accent-4); transform: scale(1.02); box-shadow: var(--shadow-lg);' : ''}">
+        ${isNearest ? `<div style="background: var(--accent-4); color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">${t('water_recommended')}</div>` : ''}
+        <div class="card-title" style="font-size:1rem;">🚰 ${t(wp.name)}</div>
+        <div class="zone-hint" style="margin:8px 0;">📍 ${t('stalls_zone')} ${wp.zone}</div>
+        ${wp.nearby_landmark ? `<p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">📍 ${t(wp.nearby_landmark)}</p>` : ''}
+        <button class="btn btn-secondary btn-sm w-100" onclick="navigateToLocation('${wp.zone}')">${t('get_route')}</button>
+      </div>
+    `;
+  }).join('');
+}
 
 window.closeWaterSection = function() {
   document.getElementById('waterSection').style.display = 'none';

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CrowdSense AI – Smart Stadium Management System</title>
   <meta name="description" content="AI-Powered Smart Stadium Management System for real-time crowd monitoring, predictive routing, virtual queues, and intelligent assistance at large-scale sporting venues.">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏟️</text></svg>">
 </head>
 <body>
@@ -17,49 +17,13 @@
   <div class="header-inner">
     <div class="logo">
       <div class="logo-icon">🏟️</div>
-      <span data-i18n="app_title">CrowdSense AI</span>
+      <span data-i18n="app_title" class="app-title-text">CrowdSense AI</span>
     </div>
-
-    <nav class="nav-tabs" id="navTabs">
-      <button class="nav-tab active" data-section="dashboard" id="tab-dashboard">
-        <span class="tab-icon">📊</span>
-        <span data-i18n="nav_dashboard">Dashboard</span>
-      </button>
-      <button class="nav-tab" data-section="routes" id="tab-routes">
-        <span class="tab-icon">🗺️</span>
-        <span data-i18n="nav_routes">Route Finder</span>
-      </button>
-      <button class="nav-tab" data-section="queue" id="tab-queue">
-        <span class="tab-icon">🎫</span>
-        <span data-i18n="nav_queue">Queue & Orders</span>
-      </button>
-      <button class="nav-tab" data-section="stalls" id="tab-stalls">
-        <span class="tab-icon">🏪</span>
-        <span data-i18n="nav_stalls">Stalls</span>
-      </button>
-      <button class="nav-tab" data-section="help" id="tab-help">
-        <span class="tab-icon">🆘</span>
-        <span data-i18n="nav_help">Help</span>
-      </button>
-      <button class="nav-tab" data-section="assistant" id="tab-assistant">
-        <span class="tab-icon">🤖</span>
-        <span data-i18n="nav_assistant">AI Assistant</span>
-      </button>
-    </nav>
 
     <div class="header-controls">
       <!-- Language Selector -->
-      <div class="lang-selector" id="langSelector">
-        <button class="btn-icon tooltip" data-tooltip="Language" id="langToggle" aria-label="Select language">🌐</button>
-        <div class="lang-dropdown" id="langDropdown">
-          <button class="lang-option active" data-lang="en">🇺🇸 English</button>
-          <button class="lang-option" data-lang="es">🇪🇸 Español</button>
-          <button class="lang-option" data-lang="hi">🇮🇳 हिन्दी</button>
-          <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
-          <button class="lang-option" data-lang="ta">🇮🇳 தமிழ்</button>
-          <button class="lang-option" data-lang="ml">🇮🇳 മലയാളം</button>
-        </div>
-      </div>
+      <button class="btn-icon tooltip" data-tooltip="Language" id="langToggle" aria-label="Select language">🌐</button>
+
       <!-- Theme Toggle -->
       <button class="btn-icon tooltip" data-tooltip="Toggle theme" id="themeToggle" aria-label="Toggle dark/light theme">🌙</button>
       <!-- User / Auth Control -->
@@ -74,6 +38,33 @@
     </div>
   </div>
 </header>
+
+<nav class="nav-tabs" id="navTabs">
+  <button class="nav-tab active" data-section="dashboard" id="tab-dashboard">
+    <span class="tab-icon">📊</span>
+    <span data-i18n="nav_dashboard">Dashboard</span>
+  </button>
+  <button class="nav-tab" data-section="routes" id="tab-routes">
+    <span class="tab-icon">🗺️</span>
+    <span data-i18n="nav_routes">Route Finder</span>
+  </button>
+  <button class="nav-tab" data-section="queue" id="tab-queue">
+    <span class="tab-icon">🎫</span>
+    <span data-i18n="nav_queue">Queue & Orders</span>
+  </button>
+  <button class="nav-tab" data-section="stalls" id="tab-stalls">
+    <span class="tab-icon">🏪</span>
+    <span data-i18n="nav_stalls">Stalls</span>
+  </button>
+  <button class="nav-tab" data-section="help" id="tab-help">
+    <span class="tab-icon">🆘</span>
+    <span data-i18n="nav_help">Help</span>
+  </button>
+  <button class="nav-tab" data-section="assistant" id="tab-assistant">
+    <span class="tab-icon">🤖</span>
+    <span data-i18n="nav_assistant">AI Assistant</span>
+  </button>
+</nav>
 
 <!-- Context Bar -->
 <div class="context-bar" id="contextBar" style="display:none;">
@@ -144,14 +135,15 @@
   </div>
 
   <div class="card" style="padding: 0; overflow: hidden;">
-    <div class="heatmap-container">
-      <canvas class="heatmap-canvas" id="heatmapCanvas"></canvas>
+      <div class="heatmap-container" style="border-bottom: 1px solid var(--border-subtle);">
+        <button class="btn-expand-map" id="btnExpandMap" title="View Full Map" aria-label="Expand map">🔍</button>
+        <canvas class="heatmap-canvas" id="heatmapCanvas"></canvas>
+      </div>
       <div class="heatmap-legend">
         <span data-i18n="legend_low">Low</span>
         <div class="legend-bar"></div>
         <span data-i18n="legend_high">High</span>
       </div>
-    </div>
   </div>
 
   <div class="card" style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
@@ -478,6 +470,35 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+  <!-- Full Map Modal -->
+  <div class="modal-overlay" id="fullMapOverlay" style="display:none; padding:0; align-items:stretch;">
+    <div class="modal full-map-modal">
+      <div class="modal-title" style="padding:16px;">
+        <span data-i18n="dashboard_title">Live Crowd Density</span>
+        <span style="flex:1;"></span>
+        <button class="btn-icon" id="btnCloseFullMap">✕</button>
+      </div>
+      <div class="heatmap-container" style="flex:1; border-radius:0; height:100%; position:relative;">
+        <canvas class="heatmap-canvas" id="fullMapCanvas"></canvas>
+        <div class="heatmap-legend" style="position: absolute; top: 12px; left: 12px; transform: none;">
+          <span data-i18n="legend_low">Low</span>
+          <div class="legend-bar"></div>
+          <span data-i18n="legend_high">High</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=2"></script>
+  <!-- Global Language Dropdown -->
+  <div class="lang-dropdown" id="langDropdown">
+    <button class="lang-option active" data-lang="en">🇺🇸 English</button>
+    <button class="lang-option" data-lang="es">🇪🇸 Español</button>
+    <button class="lang-option" data-lang="hi">🇮🇳 हिन्दी</button>
+    <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
+    <button class="lang-option" data-lang="ta">🇮🇳 தமிழ்</button>
+    <button class="lang-option" data-lang="ml">🇮🇳 മലയാളം</button>
+  </div>
+
 </body>
 </html>

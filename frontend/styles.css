@@ -163,17 +163,55 @@ a:hover { color: var(--accent-1); }
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 16px;
-  gap: 12px;
-  flex-wrap: wrap; /* Allow header to wrap on very small screens */
+  gap: 8px;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
+@media (max-width: 768px) {
+  .app-header {
+    padding: 8px 0;
+  }
+  .header-inner {
+    flex-wrap: nowrap; /* Force one row */
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 44px;
+    gap: 0;
+  }
+  .logo {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+  }
+  .logo span.app-title-text {
+    display: inline-block !important;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-left: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+  }
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+  }
 }
 
 .logo-icon {
@@ -197,19 +235,25 @@ a:hover { color: var(--accent-1); }
 
 /* ── Nav Tabs ────────────────────────────────────────────────────── */
 .nav-tabs {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
   display: flex;
   gap: 2px;
   padding: 4px;
   background: var(--bg-card);
+  backdrop-filter: blur(12px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   overflow-x: auto;
-  scrollbar-width: thin; /* Show thin scrollbar if needed */
+  scrollbar-width: thin;
   flex-wrap: nowrap;
-  max-width: 100%;
+  max-width: 90%;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-med);
 }
-
-.nav-tabs::-webkit-scrollbar { display: none; }
 
 .nav-tab {
   display: flex;
@@ -404,12 +448,18 @@ a:hover { color: var(--accent-1); }
   display: block;
 }
 
+@media (max-width: 768px) {
+  .heatmap-container {
+    aspect-ratio: 4/3;
+    min-height: 300px;
+  }
+}
+
 .heatmap-legend {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 12px;
   gap: 8px;
   padding: 8px 14px;
   background: var(--bg-glass);
@@ -810,16 +860,20 @@ a:hover { color: var(--accent-1); }
 
 /* ── Help Section ────────────────────────────────────────────────── */
 .help-card {
-  position: relative;
-  padding-left: 52px;
+  display: flex !important;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px !important;
+  overflow: visible !important;
 }
 
 .help-icon {
-  position: absolute;
-  left: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.5rem;
+  font-size: 1.8rem;
+  flex-shrink: 0;
+  margin-top: 4px;
+  width: 40px;
+  display: flex;
+  justify-content: center;
 }
 
 .help-phone {
@@ -928,16 +982,17 @@ a:hover { color: var(--accent-1); }
 }
 
 .lang-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed; /* Globalized positioning */
+  top: auto;
+  bottom: 80px;
+  right: 16px;
   background: var(--bg-dropdown);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 4px;
-  min-width: 140px;
+  min-width: 160px;
   box-shadow: var(--shadow-lg);
-  z-index: 150;
+  z-index: 2500; /* Above nav and everything */
   display: none;
 }
 
@@ -993,40 +1048,124 @@ a:hover { color: var(--accent-1); }
 
 /* ── Responsiveness ──────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .grid-2, .grid-3, .grid-4 {
-    grid-template-columns: 1fr;
-  }
-
-  .header-inner {
-    flex-wrap: wrap;
-  }
-
   .nav-tabs {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
     width: 100%;
-    justify-content: flex-start;
+    max-width: 100%;
+    z-index: 2000;
+    background: var(--bg-glass);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    border-radius: 0;
+    border-top: 1px solid var(--border-subtle);
+    padding: 10px 12px;
+    justify-content: space-around;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
   }
 
-  .route-form {
+  .nav-tab {
     flex-direction: column;
+    gap: 2px;
+    padding: 6px 4px;
+    font-size: 0.65rem;
+    flex: 1;
+    text-align: center;
   }
 
-  .form-group {
-    min-width: 100%;
-  }
-
-  .chat-container {
-    height: 500px;
-  }
-
-  .section-title {
+  .nav-tab .tab-icon {
     font-size: 1.2rem;
+  }
+
+  .nav-tab span[data-i18n] {
+    display: block;
+  }
+
+  /* Compact Context Bar */
+  .context-bar {
+    top: 60px;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    justify-content: space-between;
+    height: auto;
+    min-height: 40px;
+  }
+
+  .ctx-item {
+    gap: 2px;
+    white-space: nowrap;
+  }
+  
+  .ctx-label {
+    font-size: 0.62rem;
+    opacity: 0.8;
+  }
+
+  /* Optimized Grid for Stats */
+  #statsGrid.grid-4 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    flex-direction: row !important; /* Reset from prev attempts */
+    gap: 10px;
+  }
+
+  .grid-2, .grid-3, .grid-4:not(#statsGrid) {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 12px !important;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .stat-value {
+    font-size: 1.15rem !important;
+  }
+
+  .stat-label {
+    font-size: 0.6rem !important;
+  }
+
+  .stat-card, .card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .app-container {
+    padding-bottom: 90px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .heatmap-canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  .tooltip::after {
+    display: none !important;
+  }
+
+  .lang-dropdown {
+    bottom: 85px;
+    right: 12px;
+    min-width: 180px;
   }
 }
 
 @media (max-width: 480px) {
-  .app-container { padding: 0 12px; }
-  .card { padding: 16px; }
-  .nav-tab { padding: 6px 10px; font-size: 0.75rem; }
+  .app-container { padding: 0 10px; padding-bottom: 85px; }
+  .card { padding: 14px; }
+  .auth-control { margin-left: 0; }
 }
 
 /* ── Quantity controls ───────────────────────────────────────────── */
@@ -1303,6 +1442,41 @@ a:hover { color: var(--accent-1); }
   font-weight: 700;
 }
 
+.btn-expand-map {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(8px);
+}
+
+.btn-expand-map:hover {
+  background: var(--accent-1-glow);
+  transform: scale(1.1);
+}
+
+.full-map-modal {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .stadium-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -1360,4 +1534,15 @@ a:hover { color: var(--accent-1); }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Map Expansion - UI Hiding */
+body.map-expanded .nav-tabs,
+body.map-expanded .app-header,
+body.map-expanded .context-bar {
+  display: none !important;
+}
+
+.modal-overlay {
+  z-index: 9999; /* Ensure modal is on top of everything */
 }
