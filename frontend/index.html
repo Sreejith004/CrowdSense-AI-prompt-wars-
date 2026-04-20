@@ -473,18 +473,18 @@
   <!-- Full Map Modal -->
   <div class="modal-overlay" id="fullMapOverlay" style="display:none; padding:0; align-items:stretch;">
     <div class="modal full-map-modal">
-      <div class="modal-title" style="padding:16px;">
+      <div class="modal-title" style="padding:16px; display:flex; align-items:center; gap:20px;">
         <span data-i18n="dashboard_title">Live Crowd Density</span>
+        <div class="heatmap-legend" style="background:transparent; border:none; padding:0; gap:8px;">
+          <span data-i18n="legend_low" style="font-size:0.7rem;">Low</span>
+          <div class="legend-bar" style="width:60px; height:6px;"></div>
+          <span data-i18n="legend_high" style="font-size:0.7rem;">High</span>
+        </div>
         <span style="flex:1;"></span>
         <button class="btn-icon" id="btnCloseFullMap">✕</button>
       </div>
       <div class="heatmap-container" style="flex:1; border-radius:0; overflow:hidden; position:relative;">
         <canvas class="heatmap-canvas" id="fullMapCanvas"></canvas>
-      </div>
-      <div class="heatmap-legend" style="padding:16px; justify-content:center; border-top:1px solid var(--border-subtle); border-radius:0;">
-        <span data-i18n="legend_low">Low</span>
-        <div class="legend-bar"></div>
-        <span data-i18n="legend_high">High</span>
       </div>
     </div>
   </div>
